@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Japan Bucket Map Prototype</title>
+  <style>
+    :root {
+      --bg: #f5f6f3;
+      --card: #ffffff;
+      --ink: #1d2520;
+      --muted: #6f7872;
+      --line: #e3e8e3;
+      --accent: #214e3a;
+      --soft: #e9f0ec;
+      --done: #4d7b63;
+      --danger: #a14444;
+      --shadow: 0 18px 50px rgba(29, 37, 32, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    .app { max-width: 1280px; margin: 0 auto; padding: 28px; }
+    .topbar {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+    .eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+    h1 { margin: 6px 0 6px; font-size: clamp(30px, 4vw, 52px); line-height: 1; letter-spacing: -0.045em; }
+    .subtitle { margin: 0; color: var(--muted); max-width: 720px; }
+
+    .stats { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .stat {
+      min-width: 98px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.72);
+      border-radius: 14px;
+      text-align: right;
+    }
+    .stat strong { display: block; font-size: 23px; }
+    .stat span { font-size: 12px; color: var(--muted); }
+
+    .layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(340px, .9fr); gap: 20px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--shadow); }
+
+    .map-card { padding: 18px; min-height: 660px; display: flex; flex-direction: column; }
+    .map-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .map-head h2, .panel h2 { margin: 0; font-size: 19px; }
+    .legend { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+    .legend .none i { background: #d9dedb; }
+    .legend .active i { background: #8ea99b; }
+    .legend .complete i { background: #214e3a; }
+
+    #map-wrap {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      min-height: 540px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #fbfcfb, #f1f4f2);
+      overflow: hidden;
+      position: relative;
+    }
+    #japan-map { width: 100%; display: grid; place-items: center; }
+    #japan-map svg { max-width: 100% !important; height: auto !important; }
+    .map-fallback {
+      display: none;
+      text-align: center;
+      color: var(--muted);
+      padding: 30px;
+      max-width: 420px;
+    }
+
+    .pref-select { display: none; width: 100%; margin-top: 12px; }
+    .pref-select select {
+      width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: white;
+    }
+
+    .panel { padding: 22px; min-height: 660px; }
+    .empty { min-height: 580px; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 30px; }
+    .empty-emoji { font-size: 42px; display: block; margin-bottom: 8px; }
+
+    .pref-header { display: flex; align-items: start; justify-content: space-between; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .pref-header h2 { font-size: 28px; letter-spacing: -.03em; }
+    .progress { font-size: 13px; color: var(--muted); margin-top: 5px; }
+
+    .section { padding: 20px 0; border-bottom: 1px solid var(--line); }
+    .section:last-child { border-bottom: 0; }
+    .section-title { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+    .section-title h3 { margin: 0; font-size: 15px; }
+    .section-title small { color: var(--muted); }
+
+    .suggestions, .bucket-list { display: grid; gap: 8px; }
+    .suggestion, .bucket-item {
+      display: flex; align-items: center; gap: 10px; min-height: 48px;
+      border: 1px solid var(--line); border-radius: 14px; padding: 9px 10px 9px 13px;
+      background: #fff;
+    }
+    .suggestion span, .bucket-item .text { flex: 1; }
+    .mini-btn { border: 0; border-radius: 10px; background: var(--soft); color: var(--accent); font-weight: 800; padding: 8px 10px; }
+    .mini-btn:disabled { opacity: .45; cursor: default; }
+
+    .check {
+      appearance: none; width: 22px; height: 22px; border: 2px solid #aeb8b1; border-radius: 7px; display: grid; place-content: center; flex: 0 0 auto;
+    }
+    .check:checked { background: var(--accent); border-color: var(--accent); }
+    .check:checked::after { content: "✓"; color: white; font-weight: 900; font-size: 15px; }
+    .bucket-item.done .text { text-decoration: line-through; color: var(--muted); }
+    .delete { border: 0; background: transparent; color: #98a19b; font-size: 20px; padding: 4px 7px; }
+    .delete:hover { color: var(--danger); }
+
+    .add-row { display: flex; gap: 8px; }
+    .add-row input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 12px; padding: 12px 13px; outline: none; }
+    .add-row input:focus { border-color: #86a291; box-shadow: 0 0 0 3px rgba(77,123,99,.12); }
+    .primary { border: 0; background: var(--accent); color: white; border-radius: 12px; padding: 11px 14px; font-weight: 800; }
+
+    .footer-tools { margin-top: 18px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ghost { border: 1px solid var(--line); background: transparent; border-radius: 10px; padding: 9px 11px; color: var(--muted); }
+    .file-input { display: none; }
+    .note { margin-top: 12px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+    @media (max-width: 880px) {
+      .app { padding: 16px; }
+      .topbar { align-items: start; flex-direction: column; }
+      .stats { justify-content: flex-start; }
+      .layout { grid-template-columns: 1fr; }
+      .map-card, .panel { min-height: auto; }
+      #map-wrap { min-height: 430px; }
+      .empty { min-height: 260px; }
+      .pref-select { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Prototype / Japan</div>
+        <h1>Bucket Map</h1>
+        <p class="subtitle">日本地図から都道府県を選び、「いつかやりたいこと」を集めて、達成したらチェック。まずは自分が本当に使いたくなるかを試すための最小版です。</p>
+      </div>
+      <div class="stats">
+        <div class="stat"><strong id="stat-pref">0</strong><span>都道府県に登録</span></div>
+        <div class="stat"><strong id="stat-done">0</strong><span>達成</span></div>
+        <div class="stat"><strong id="stat-total">0</strong><span>Bucket</span></div>
+      </div>
+    </header>
+
+    <section class="layout">
+      <article class="card map-card">
+        <div class="map-head">
+          <h2>日本地図</h2>
+          <div class="legend">
+            <span class="none"><i></i>未登録</span>
+            <span class="active"><i></i>登録あり</span>
+            <span class="complete"><i></i>全て達成</span>
+          </div>
+        </div>
+        <div id="map-wrap">
+          <div id="japan-map"></div>
+          <div class="map-fallback" id="map-fallback">
+            <strong>地図を読み込めませんでした。</strong><br><br>
+            この試作品の地図ライブラリはインターネット経由で読み込みます。下の都道府県選択からは、そのまま全機能を使えます。
+          </div>
+        </div>
+        <div class="pref-select">
+          <select id="pref-select" aria-label="都道府県を選択"></select>
+        </div>
+        <p class="note">保存先はこのブラウザ内です。ログインもクラウド保存もまだありません。試作品なので、まず「使いたい体験か」だけ確認します。</p>
+      </article>
+
+      <aside class="card panel" id="panel">
+        <div class="empty" id="empty-state">
+          <div><span class="empty-emoji">🗾</span>地図から都道府県を選んでください。<br>スマホでは下の選択欄も使えます。</div>
+        </div>
+        <div id="pref-content" hidden>
+          <div class="pref-header">
+            <div>
+              <h2 id="pref-name"></h2>
+              <div class="progress" id="pref-progress"></div>
+            </div>
+          </div>
+
+          <section class="section">
+            <div class="section-title">
+              <h3>🔥 Popular <span style="font-weight:500;color:var(--muted)">（試作候補）</span></h3>
+              <small>＋でMy Listへ</small>
+            </div>
+            <div class="suggestions" id="suggestions"></div>
+          </section>
+
+          <section class="section">
+            <div class="section-title"><h3>My Bucket List</h3><small id="my-count"></small></div>
+            <div class="bucket-list" id="bucket-list"></div>
+          </section>
+
+          <section class="section">
+            <div class="section-title"><h3>自分で追加</h3></div>
+            <form class="add-row" id="add-form">
+              <input id="new-item" maxlength="100" placeholder="例：朝市で海鮮丼を食べる" autocomplete="off" />
+              <button class="primary" type="submit">追加</button>
+            </form>
+          </section>
+        </div>
+      </aside>
+    </section>
+
+    <div class="footer-tools">
+      <div>
+        <button class="ghost" id="export-btn">バックアップを書き出す</button>
+        <button class="ghost" id="import-btn">バックアップを読み込む</button>
+        <input class="file-input" type="file" id="import-file" accept="application/json" />
+      </div>
+      <button class="ghost" id="reset-btn">試作データを全消去</button>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/gh/ka215/svg-japan@main/dist/svg-japan.min.js"></script>
+  <script>
+    const PREFS = [
+      [1,'Hokkaido','北海道'],[2,'Aomori','青森県'],[3,'Iwate','岩手県'],[4,'Miyagi','宮城県'],[5,'Akita','秋田県'],[6,'Yamagata','山形県'],[7,'Fukushima','福島県'],
+      [8,'Ibaraki','茨城県'],[9,'Tochigi','栃木県'],[10,'Gunma','群馬県'],[11,'Saitama','埼玉県'],[12,'Chiba','千葉県'],[13,'Tokyo','東京都'],[14,'Kanagawa','神奈川県'],
+      [15,'Niigata','新潟県'],[16,'Toyama','富山県'],[17,'Ishikawa','石川県'],[18,'Fukui','福井県'],[19,'Yamanashi','山梨県'],[20,'Nagano','長野県'],[21,'Gifu','岐阜県'],[22,'Shizuoka','静岡県'],[23,'Aichi','愛知県'],
+      [24,'Mie','三重県'],[25,'Shiga','滋賀県'],[26,'Kyoto','京都府'],[27,'Osaka','大阪府'],[28,'Hyogo','兵庫県'],[29,'Nara','奈良県'],[30,'Wakayama','和歌山県'],
+      [31,'Tottori','鳥取県'],[32,'Shimane','島根県'],[33,'Okayama','岡山県'],[34,'Hiroshima','広島県'],[35,'Yamaguchi','山口県'],
+      [36,'Tokushima','徳島県'],[37,'Kagawa','香川県'],[38,'Ehime','愛媛県'],[39,'Kochi','高知県'],
+      [40,'Fukuoka','福岡県'],[41,'Saga','佐賀県'],[42,'Nagasaki','長崎県'],[43,'Kumamoto','熊本県'],[44,'Oita','大分県'],[45,'Miyazaki','宮崎県'],[46,'Kagoshima','鹿児島県'],[47,'Okinawa','沖縄県']
+    ];
+
+    // 「Popular」は実際の利用者データではなく、機能を試すための仮候補です。
+    const SUGGESTIONS = {
+      Hokkaido: ['流氷を見る','札幌雪まつりに行く','富良野のラベンダー畑を見る','知床の自然を歩く'],
+      Aomori: ['ねぶた祭を見に行く','奥入瀬渓流を歩く','弘前公園で桜を見る'],
+      Iwate: ['中尊寺を訪れる','浄土ヶ浜を見る','わんこそばに挑戦する'],
+      Miyagi: ['松島を見る','仙台で牛たんを食べる','蔵王の御釜を見る'],
+      Akita: ['大曲の花火を見る','乳頭温泉郷に泊まる','きりたんぽを食べる'],
+      Yamagata: ['銀山温泉に泊まる','山寺を歩く','蔵王の樹氷を見る'],
+      Fukushima: ['大内宿を歩く','五色沼を見る','会津若松を巡る'],
+      Ibaraki: ['国営ひたち海浜公園を見る','袋田の滝を見る','偕楽園を歩く'],
+      Tochigi: ['日光東照宮を訪れる','華厳の滝を見る','那須で温泉に入る'],
+      Gunma: ['草津温泉に入る','伊香保温泉を歩く','尾瀬を歩く'],
+      Saitama: ['川越の街並みを歩く','長瀞で自然を楽しむ','秩父の夜祭を見る'],
+      Chiba: ['鋸山を歩く','房総半島をドライブする','海沿いで夕日を見る'],
+      Tokyo: ['東京の夜景を見る','下町を食べ歩く','高尾山に登る','島旅をする'],
+      Kanagawa: ['箱根温泉に泊まる','鎌倉を歩く','横浜の夜景を見る'],
+      Niigata: ['越後湯沢で雪を楽しむ','佐渡島へ行く','日本酒を飲み比べる'],
+      Toyama: ['立山黒部アルペンルートへ行く','雨晴海岸を見る','富山湾の寿司を食べる'],
+      Ishikawa: ['兼六園を歩く','金沢の茶屋街を歩く','能登を旅する'],
+      Fukui: ['東尋坊を見る','恐竜博物館へ行く','永平寺を訪れる'],
+      Yamanashi: ['富士山を見る','河口湖で過ごす','ほうとうを食べる'],
+      Nagano: ['上高地を歩く','白馬で山を楽しむ','地獄谷野猿公苑へ行く'],
+      Gifu: ['白川郷を見る','飛騨高山を歩く','下呂温泉に入る'],
+      Shizuoka: ['富士山を眺める','伊豆をドライブする','静岡茶を楽しむ'],
+      Aichi: ['名古屋めしを食べる','犬山城を訪れる','常滑を歩く'],
+      Mie: ['伊勢神宮へ行く','熊野古道を歩く','志摩の海を見る'],
+      Shiga: ['琵琶湖を一周してみる','彦根城を訪れる','湖畔で過ごす'],
+      Kyoto: ['早朝の京都を歩く','伏見稲荷を歩く','嵐山で竹林を見る','寺社の紅葉を見る'],
+      Osaka: ['道頓堀で食べ歩く','大阪城を訪れる','新世界を歩く'],
+      Hyogo: ['姫路城を見る','有馬温泉に入る','神戸の夜景を見る'],
+      Nara: ['奈良公園を歩く','東大寺を訪れる','吉野山の桜を見る'],
+      Wakayama: ['熊野三山を巡る','高野山に泊まる','白浜の海を見る'],
+      Tottori: ['鳥取砂丘を歩く','大山を見る','砂丘で夕日を見る'],
+      Shimane: ['出雲大社へ行く','石見銀山を歩く','宍道湖の夕日を見る'],
+      Okayama: ['倉敷美観地区を歩く','後楽園を訪れる','瀬戸内の島へ行く'],
+      Hiroshima: ['宮島を歩く','平和記念公園を訪れる','尾道を歩く'],
+      Yamaguchi: ['角島大橋を渡る','秋芳洞へ行く','元乃隅神社を訪れる'],
+      Tokushima: ['阿波おどりを見る','祖谷のかずら橋を渡る','鳴門の渦潮を見る'],
+      Kagawa: ['讃岐うどんを食べ歩く','直島へ行く','父母ヶ浜で夕日を見る'],
+      Ehime: ['道後温泉に入る','しまなみ海道を走る','松山城へ行く'],
+      Kochi: ['四万十川を見る','カツオを食べる','仁淀川を見る'],
+      Fukuoka: ['屋台で食べる','太宰府天満宮へ行く','糸島をドライブする'],
+      Saga: ['有田焼の町を歩く','祐徳稲荷神社へ行く','バルーンフェスタを見る'],
+      Nagasaki: ['長崎の夜景を見る','軍艦島を見る','五島列島へ行く'],
+      Kumamoto: ['阿蘇をドライブする','熊本城を見る','黒川温泉に泊まる'],
+      Oita: ['別府で温泉巡りをする','由布院を歩く','九重の自然を楽しむ'],
+      Miyazaki: ['高千穂峡を見る','青島を歩く','海沿いをドライブする'],
+      Kagoshima: ['桜島を見る','屋久島を歩く','指宿で砂むし温泉に入る'],
+      Okinawa: ['離島へ行く','青い海で泳ぐ','沖縄そばを食べる','星空を見る']
+    };
+
+    const JP_BY_EN = Object.fromEntries(PREFS.map(p => [p[1], p[2]]));
+    const EN_BY_JP = Object.fromEntries(PREFS.map(p => [p[2], p[1]]));
+    const STORAGE_KEY = 'japanBucketMapPrototype_v1';
+    let data = loadData();
+    let selectedPref = null;
+
+    function loadData() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+      catch { return {}; }
+    }
+    function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+    function itemsFor(pref) { return data[pref] || []; }
+    function uid() { return (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)); }
+
+    function prefColor(pref) {
+      const items = itemsFor(pref);
+      if (!items.length) return '#d9dedb';
+      if (items.every(x => x.done)) return '#214e3a';
+      return '#8ea99b';
+    }
+
+    function buildMap() {
+      const el = document.getElementById('japan-map');
+      el.innerHTML = '';
+      if (typeof window.svgJapan !== 'function') {
+        document.getElementById('map-fallback').style.display = 'block';
+        return;
+      }
+      const prefColors = {};
+      PREFS.forEach(([_, en]) => { prefColors[en] = prefColor(en); });
+      try {
+        svgJapan({
+          element: '#japan-map',
+          type: 'dense',
+          width: '100%',
+          stroked: true,
+          strokeColor: '#ffffff',
+          activeColor: '#d1a45f',
+          prefColors,
+          withTips: true
+        });
+        document.getElementById('map-fallback').style.display = 'none';
+      } catch (e) {
+        console.error(e);
+        document.getElementById('map-fallback').style.display = 'block';
+      }
+    }
+
+    function initSelect() {
+      const select = document.getElementById('pref-select');
+      select.innerHTML = '<option value="">都道府県を選択</option>' + PREFS.map(([_, en, jp]) => `<option value="${en}">${jp}</option>`).join('');
+      select.addEventListener('change', e => e.target.value && selectPref(e.target.value));
+    }
+
+    document.addEventListener('svgmap.click', function(e) {
+      const name = e.target && e.target.getAttribute && e.target.getAttribute('data-name');
+      if (name && JP_BY_EN[name]) selectPref(name);
+    }, false);
+
+    function selectPref(pref) {
+      selectedPref = pref;
+      const select = document.getElementById('pref-select');
+      select.value = pref;
+      document.getElementById('empty-state').hidden = true;
+      document.getElementById('pref-content').hidden = false;
+      renderPanel();
+    }
+
+    function renderPanel() {
+      if (!selectedPref) return;
+      const items = itemsFor(selectedPref);
+      const done = items.filter(x => x.done).length;
+      document.getElementById('pref-name').textContent = JP_BY_EN[selectedPref];
+      document.getElementById('pref-progress').textContent = items.length ? `${done} / ${items.length} 達成` : 'まだBucket Listはありません';
+      document.getElementById('my-count').textContent = `${items.length}件`;
+
+      const suggestions = SUGGESTIONS[selectedPref] || [];
+      const sWrap = document.getElementById('suggestions');
+      sWrap.innerHTML = suggestions.length ? suggestions.map(text => {
+        const exists = items.some(x => x.text === text);
+        return `<div class="suggestion"><span>${escapeHtml(text)}</span><button class="mini-btn" data-add-suggestion="${encodeURIComponent(text)}" ${exists ? 'disabled' : ''}>${exists ? '追加済み' : '＋'}</button></div>`;
+      }).join('') : '<div class="note">この県の試作候補はまだありません。自分で追加してください。</div>';
+
+      const list = document.getElementById('bucket-list');
+      list.innerHTML = items.length ? items.map(item => `
+        <div class="bucket-item ${item.done ? 'done' : ''}">
+          <input class="check" type="checkbox" ${item.done ? 'checked' : ''} data-toggle="${item.id}" aria-label="達成切替" />
+          <span class="text">${escapeHtml(item.text)}</span>
+          <button class="delete" data-delete="${item.id}" aria-label="削除">×</button>
+        </div>`).join('') : '<div class="note">Popularから追加するか、下から自分のBucketを登録できます。</div>';
+
+      bindPanelEvents();
+      updateStats();
+    }
+
+    function bindPanelEvents() {
+      document.querySelectorAll('[data-add-suggestion]').forEach(btn => btn.addEventListener('click', () => {
+        addItem(decodeURIComponent(btn.dataset.addSuggestion));
+      }));
+      document.querySelectorAll('[data-toggle]').forEach(box => box.addEventListener('change', () => {
+        const item = itemsFor(selectedPref).find(x => x.id === box.dataset.toggle);
+        if (item) item.done = box.checked;
+        persistAndRefresh();
+      }));
+      document.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => {
+        data[selectedPref] = itemsFor(selectedPref).filter(x => x.id !== btn.dataset.delete);
+        if (!data[selectedPref].length) delete data[selectedPref];
+        persistAndRefresh();
+      }));
+    }
+
+    function addItem(text) {
+      text = text.trim();
+      if (!text || !selectedPref) return;
+      if (!data[selectedPref]) data[selectedPref] = [];
+      if (data[selectedPref].some(x => x.text === text)) return;
+      data[selectedPref].push({ id: uid(), text, done: false, createdAt: new Date().toISOString() });
+      persistAndRefresh();
+    }
+
+    function persistAndRefresh() {
+      saveData();
+      renderPanel();
+      buildMap();
+    }
+
+    function updateStats() {
+      const all = Object.values(data).flat();
+      document.getElementById('stat-pref').textContent = Object.keys(data).filter(k => data[k]?.length).length;
+      document.getElementById('stat-done').textContent = all.filter(x => x.done).length;
+      document.getElementById('stat-total').textContent = all.length;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
+    }
+
+    document.getElementById('add-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const input = document.getElementById('new-item');
+      addItem(input.value);
+      input.value = '';
+      input.focus();
+    });
+
+    document.getElementById('export-btn').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify({version:1, exportedAt:new Date().toISOString(), data}, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'bucket-map-backup.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    document.getElementById('import-btn').addEventListener('click', () => document.getElementById('import-file').click());
+    document.getElementById('import-file').addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const parsed = JSON.parse(await file.text());
+        const imported = parsed.data || parsed;
+        if (!imported || typeof imported !== 'object') throw new Error('invalid');
+        data = imported;
+        saveData();
+        updateStats();
+        buildMap();
+        if (selectedPref) renderPanel();
+        alert('バックアップを読み込みました。');
+      } catch {
+        alert('読み込めるバックアップではありません。');
+      }
+      e.target.value = '';
+    });
+
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      if (!confirm('登録したBucket Listをすべて消去しますか？')) return;
+      data = {};
+      saveData();
+      updateStats();
+      buildMap();
+      if (selectedPref) renderPanel();
+    });
+
+    initSelect();
+    updateStats();
+    window.addEventListener('load', () => {
+      buildMap();
+      setTimeout(() => {
+        if (!document.querySelector('#japan-map svg')) document.getElementById('map-fallback').style.display = 'block';
+      }, 1800);
+    });
+  </script>
+</body>
+</html>
