@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Japan Bucket Map Prototype</title>
+  <title>Japan Bucket Map Prototype v4</title>
   <style>
     :root {
       --bg: #f5f6f3;
@@ -13,7 +13,7 @@
       --line: #e3e8e3;
       --accent: #214e3a;
       --soft: #e9f0ec;
-      --done: #d96b32;
+      --done: #00aa6e;
       --danger: #a14444;
       --shadow: 0 18px 50px rgba(29, 37, 32, 0.08);
     }
@@ -67,9 +67,10 @@
     .legend { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
     .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
     .legend .none i { background: #d9dedb; }
-    .legend .planned i { background: #dce9ee; }
-    .legend .progressing i { background: #efad65; }
-    .legend .complete i { background: #b94b2d; }
+    .legend .planned i { background: #c9de7c; }
+    .legend .progressing i { background: #5bc579; }
+    .legend .complete i { background: #00aa6e; }
+    .legend .selected i { background: #fbc96b; }
 
     #map-wrap {
       flex: 1;
@@ -77,7 +78,7 @@
       place-items: center;
       min-height: 540px;
       border-radius: 18px;
-      background: linear-gradient(180deg, #fbfcfb, #f1f4f2);
+      background: #a0d8ef;
       overflow: hidden;
       position: relative;
     }
@@ -97,6 +98,16 @@
       padding: 30px;
       max-width: 420px;
     }
+
+    .japan-icon { width: 22px; height: 22px; vertical-align: -5px; margin-right: 5px; fill: currentColor; }
+    .empty-japan-icon { width: 58px; height: 58px; display: block; margin: 0 auto 10px; color: #7f9386; }
+    .map-selection-summary {
+      margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px;
+      background: rgba(255,255,255,.9); display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .map-selection-summary[hidden] { display:none; }
+    .map-selection-summary strong { font-size: 15px; }
+    .map-selection-summary span { color: var(--muted); font-size: 13px; text-align: right; }
 
     .pref-select { display: none; width: 100%; margin-top: 12px; }
     .pref-select select {
@@ -178,6 +189,16 @@
   </style>
 </head>
 <body>
+  <!-- Bucket Map用のオリジナル簡略日本地図アイコン -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="bucket-japan-icon" viewBox="0 0 64 64">
+      <ellipse cx="45" cy="10" rx="8" ry="5" transform="rotate(18 45 10)"/>
+      <path d="M43 17c4 2 6 6 4 10-2 4-6 5-8 9-2 3-1 7-4 9-3 2-7 1-8-2-1-3 2-6 4-9 2-3 2-7 5-10 3-3 7-5 7-7 0-2-4-4-7-3-5 2-8 7-10 12-2 5-6 10-11 12-4 1-7-2-5-5 2-3 6-4 7-8 1-3-2-5-5-4-3 1-5 4-8 5-3 1-6-1-5-4 1-3 5-4 8-5 4-1 7-4 8-8 1-4-1-7 1-10 2-3 6-4 9-2Z"/>
+      <ellipse cx="17" cy="52" rx="4.5" ry="3" transform="rotate(-25 17 52)"/>
+      <circle cx="10" cy="57" r="2.2"/>
+      <circle cx="6" cy="60" r="1.5"/>
+    </symbol>
+  </svg>
   <main class="app">
     <header class="topbar">
       <div>
@@ -193,7 +214,7 @@
     </header>
 
     <nav class="tabs" aria-label="表示切替">
-      <button class="tab-btn active" type="button" data-view="map-view">🗾 地図</button>
+      <button class="tab-btn active" type="button" data-view="map-view"><svg class="japan-icon" aria-hidden="true"><use href="#bucket-japan-icon"></use></svg>地図</button>
       <button class="tab-btn" type="button" data-view="list-view">☰ 一覧</button>
     </nav>
 
@@ -203,9 +224,10 @@
           <h2>日本地図</h2>
           <div class="legend">
             <span class="none"><i></i>未登録</span>
-            <span class="planned"><i></i>行きたい</span>
+            <span class="planned"><i></i>これから</span>
             <span class="progressing"><i></i>達成中</span>
             <span class="complete"><i></i>達成</span>
+            <span class="selected"><i></i>選択中</span>
           </div>
         </div>
         <div id="map-wrap">
@@ -215,6 +237,10 @@
             この試作品の地図ライブラリはインターネット経由で読み込みます。下の都道府県選択からは、そのまま全機能を使えます。
           </div>
         </div>
+        <div class="map-selection-summary" id="map-selection-summary" hidden>
+          <strong id="map-selected-pref"></strong>
+          <span id="map-selected-status"></span>
+        </div>
         <div class="pref-select">
           <select id="pref-select" aria-label="都道府県を選択"></select>
         </div>
@@ -223,7 +249,7 @@
 
       <aside class="card panel" id="panel">
         <div class="empty" id="empty-state">
-          <div><span class="empty-emoji">🗾</span>地図から都道府県を選んでください。<br>スマホでは下の選択欄も使えます。</div>
+          <div><svg class="empty-japan-icon" aria-hidden="true"><use href="#bucket-japan-icon"></use></svg>地図から都道府県を選んでください。<br>スマホでは地図を直接タップできます。</div>
         </div>
         <div id="pref-content" hidden>
           <div class="pref-header">
@@ -366,15 +392,21 @@
       return Math.round((items.filter(x => x.done).length / items.length) * 100);
     }
 
+    function mixHex(from, to, ratio) {
+      const a = from.replace('#','');
+      const b = to.replace('#','');
+      const ar = parseInt(a.slice(0,2),16), ag = parseInt(a.slice(2,4),16), ab = parseInt(a.slice(4,6),16);
+      const br = parseInt(b.slice(0,2),16), bg = parseInt(b.slice(2,4),16), bb = parseInt(b.slice(4,6),16);
+      const m = (x,y) => Math.round(x + (y-x) * ratio).toString(16).padStart(2,'0');
+      return `#${m(ar,br)}${m(ag,bg)}${m(ab,bb)}`;
+    }
+
     function prefColor(pref) {
       const rate = prefRate(pref);
       if (rate === null) return '#d9dedb';      // 未登録
-      if (rate === 0) return '#dce9ee';         // 行きたいだけ：薄い水色
-      if (rate < 25) return '#f6e0c5';          // 1–24%
-      if (rate < 50) return '#efbf83';          // 25–49%
-      if (rate < 75) return '#ed9b53';          // 50–74%
-      if (rate < 100) return '#dc7137';         // 75–99%
-      return '#b94b2d';                         // 100%
+      if (rate === 0) return '#c9de7c';         // これから
+      if (rate >= 100) return '#00aa6e';        // 達成
+      return mixHex('#c9de7c', '#00aa6e', rate / 100); // 達成率に応じて連続的に濃く
     }
 
     function buildMap() {
@@ -385,7 +417,7 @@
         return;
       }
       const prefColors = {};
-      PREFS.forEach(([_, en]) => { prefColors[en] = prefColor(en); });
+      PREFS.forEach(([_, en]) => { prefColors[en] = (en === selectedPref ? '#fbc96b' : prefColor(en)); });
       try {
         svgJapan({
           element: '#japan-map',
@@ -393,11 +425,19 @@
           width: '100%',
           stroked: true,
           strokeColor: '#7d8881',
-          activeColor: '#c86231',
+          activeColor: '#fbc96b',
           prefColors,
           withTips: true
         });
         document.getElementById('map-fallback').style.display = 'none';
+        // ライブラリの独自イベントに加え、地図要素そのものにもクリックを結びつける
+        document.querySelectorAll('#japan-map [data-name]').forEach(shape => {
+          shape.style.cursor = 'pointer';
+          shape.addEventListener('click', () => {
+            const name = shape.getAttribute('data-name');
+            if (name && JP_BY_EN[name]) selectPref(name);
+          });
+        });
       } catch (e) {
         console.error(e);
         document.getElementById('map-fallback').style.display = 'block';
@@ -421,7 +461,21 @@
       select.value = pref;
       document.getElementById('empty-state').hidden = true;
       document.getElementById('pref-content').hidden = false;
+      updateMapSelectionSummary();
       renderPanel();
+      buildMap();
+    }
+
+    function updateMapSelectionSummary() {
+      const box = document.getElementById('map-selection-summary');
+      if (!selectedPref) { box.hidden = true; return; }
+      const items = itemsFor(selectedPref);
+      const done = items.filter(x => x.done).length;
+      document.getElementById('map-selected-pref').textContent = JP_BY_EN[selectedPref];
+      document.getElementById('map-selected-status').textContent = items.length
+        ? `Bucket ${items.length}件 ・ ${done}/${items.length} 達成`
+        : 'Bucket Listはまだありません';
+      box.hidden = false;
     }
 
     function renderPanel() {
@@ -478,7 +532,7 @@
 
     function persistAndRefresh() {
       saveData();
-      if (selectedPref) renderPanel();
+      if (selectedPref) { renderPanel(); updateMapSelectionSummary(); }
       buildMap();
       renderAllList();
     }
@@ -589,7 +643,7 @@
         saveData();
         updateStats();
         buildMap();
-        if (selectedPref) renderPanel();
+        if (selectedPref) { renderPanel(); updateMapSelectionSummary(); }
         renderAllList();
         alert('バックアップを読み込みました。');
       } catch {
@@ -604,7 +658,7 @@
       saveData();
       updateStats();
       buildMap();
-      if (selectedPref) renderPanel();
+      if (selectedPref) { renderPanel(); updateMapSelectionSummary(); }
       renderAllList();
     });
 
