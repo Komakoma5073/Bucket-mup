@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Japan Bucket Map Prototype v4</title>
+  <title>Japan Bucket Map Prototype v5</title>
   <style>
     :root {
       --bg: #f5f6f3;
@@ -81,9 +81,36 @@
       background: #a0d8ef;
       overflow: hidden;
       position: relative;
+      user-select: none;
+      -webkit-user-select: none;
     }
-    #japan-map { width: 100%; display: grid; place-items: center; }
+    #japan-map {
+      width: 100%;
+      display: grid;
+      place-items: center;
+      transform-origin: center center;
+      will-change: transform;
+      transition: transform .16s ease-out;
+    }
+    #japan-map.is-zooming { transition: none; }
     #japan-map svg { max-width: 100% !important; height: auto !important; }
+    .map-zoom-controls {
+      position: absolute; right: 12px; bottom: 12px; z-index: 10;
+      display: grid; grid-template-columns: repeat(3, 42px); gap: 6px;
+      padding: 6px; border-radius: 14px; background: rgba(255,255,255,.92);
+      border: 1px solid rgba(125,136,129,.3); box-shadow: 0 6px 22px rgba(29,37,32,.12);
+      backdrop-filter: blur(8px);
+    }
+    .map-zoom-controls button {
+      width: 42px; height: 38px; border: 0; border-radius: 9px;
+      background: #f4f6f4; color: var(--ink); font-weight: 900; font-size: 20px;
+    }
+    .map-zoom-controls button:last-child { font-size: 12px; }
+    .map-zoom-hint {
+      position: absolute; left: 12px; bottom: 13px; z-index: 5;
+      padding: 7px 9px; border-radius: 10px; background: rgba(255,255,255,.78);
+      color: #526058; font-size: 11px; pointer-events: none;
+    }
     /* 未登録の県でも県境が見えるように、地図の輪郭線を少し濃く表示 */
     #japan-map svg path, #japan-map svg polygon {
       stroke: #7d8881 !important;
@@ -108,6 +135,18 @@
     .map-selection-summary[hidden] { display:none; }
     .map-selection-summary strong { font-size: 15px; }
     .map-selection-summary span { color: var(--muted); font-size: 13px; text-align: right; }
+    .map-quick-list {
+      margin-top: 8px; border: 1px solid var(--line); border-radius: 14px;
+      background: rgba(255,255,255,.95); overflow: hidden;
+    }
+    .map-quick-list[hidden] { display:none; }
+    .map-quick-head { padding: 10px 13px; font-size: 12px; color: var(--muted); background:#fafbfa; border-bottom:1px solid var(--line); }
+    .map-quick-row { display:flex; align-items:center; gap:9px; padding:10px 13px; border-bottom:1px solid #edf0ed; font-size:13px; }
+    .map-quick-row:last-child { border-bottom:0; }
+    .map-quick-row.done { color:var(--muted); text-decoration:line-through; }
+    .map-quick-dot { width:9px; height:9px; border:2px solid #8e9992; border-radius:50%; flex:0 0 auto; }
+    .map-quick-row.done .map-quick-dot { border-color:#00aa6e; background:#00aa6e; }
+    .completion-flower { pointer-events:none; paint-order:stroke; stroke:rgba(255,255,255,.9); stroke-width:2.5px; }
 
     .pref-select { display: none; width: 100%; margin-top: 12px; }
     .pref-select select {
@@ -226,12 +265,18 @@
             <span class="none"><i></i>未登録</span>
             <span class="planned"><i></i>これから</span>
             <span class="progressing"><i></i>達成中</span>
-            <span class="complete"><i></i>達成</span>
+            <span class="complete"><i></i>達成 🌼</span>
             <span class="selected"><i></i>選択中</span>
           </div>
         </div>
         <div id="map-wrap">
           <div id="japan-map"></div>
+          <div class="map-zoom-hint">地図だけ拡大できます</div>
+          <div class="map-zoom-controls" aria-label="地図の拡大縮小">
+            <button type="button" id="zoom-out" aria-label="縮小">−</button>
+            <button type="button" id="zoom-in" aria-label="拡大">＋</button>
+            <button type="button" id="zoom-reset" aria-label="等倍に戻す">100%</button>
+          </div>
           <div class="map-fallback" id="map-fallback">
             <strong>地図を読み込めませんでした。</strong><br><br>
             この試作品の地図ライブラリはインターネット経由で読み込みます。下の都道府県選択からは、そのまま全機能を使えます。
@@ -241,6 +286,7 @@
           <strong id="map-selected-pref"></strong>
           <span id="map-selected-status"></span>
         </div>
+        <div class="map-quick-list" id="map-quick-list" hidden></div>
         <div class="pref-select">
           <select id="pref-select" aria-label="都道府県を選択"></select>
         </div>
@@ -377,6 +423,9 @@
     let data = loadData();
     let selectedPref = null;
     let listFilter = 'all';
+    let mapZoom = 1;
+    let pinchStartDistance = null;
+    let pinchStartZoom = 1;
 
     function loadData() {
       try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
@@ -409,6 +458,41 @@
       return mixHex('#c9de7c', '#00aa6e', rate / 100); // 達成率に応じて連続的に濃く
     }
 
+    function applyMapZoom() {
+      const map = document.getElementById('japan-map');
+      map.style.transform = `scale(${mapZoom})`;
+      document.getElementById('zoom-reset').textContent = `${Math.round(mapZoom * 100)}%`;
+    }
+
+    function setMapZoom(next) {
+      mapZoom = Math.min(3.2, Math.max(1, next));
+      applyMapZoom();
+    }
+
+    function addCompletionFlowers() {
+      const svg = document.querySelector('#japan-map svg');
+      if (!svg) return;
+      svg.querySelectorAll('.completion-flower').forEach(el => el.remove());
+      PREFS.forEach(([_, en]) => {
+        if (prefRate(en) !== 100) return;
+        const shape = svg.querySelector(`[data-name="${en}"]`);
+        if (!shape || typeof shape.getBBox !== 'function') return;
+        try {
+          const box = shape.getBBox();
+          if (!box.width && !box.height) return;
+          const marker = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          marker.setAttribute('x', box.x + box.width / 2);
+          marker.setAttribute('y', box.y + box.height / 2);
+          marker.setAttribute('text-anchor', 'middle');
+          marker.setAttribute('dominant-baseline', 'central');
+          marker.setAttribute('class', 'completion-flower');
+          marker.setAttribute('font-size', Math.max(9, Math.min(18, Math.max(box.width, box.height) * .42)));
+          marker.textContent = '🌼';
+          svg.appendChild(marker);
+        } catch (_) {}
+      });
+    }
+
     function buildMap() {
       const el = document.getElementById('japan-map');
       el.innerHTML = '';
@@ -430,14 +514,9 @@
           withTips: true
         });
         document.getElementById('map-fallback').style.display = 'none';
-        // ライブラリの独自イベントに加え、地図要素そのものにもクリックを結びつける
-        document.querySelectorAll('#japan-map [data-name]').forEach(shape => {
-          shape.style.cursor = 'pointer';
-          shape.addEventListener('click', () => {
-            const name = shape.getAttribute('data-name');
-            if (name && JP_BY_EN[name]) selectPref(name);
-          });
-        });
+        document.querySelectorAll('#japan-map [data-name]').forEach(shape => { shape.style.cursor = 'pointer'; });
+        addCompletionFlowers();
+        applyMapZoom();
       } catch (e) {
         console.error(e);
         document.getElementById('map-fallback').style.display = 'block';
@@ -450,8 +529,15 @@
       select.addEventListener('change', e => e.target.value && selectPref(e.target.value));
     }
 
+    // 地図ライブラリのイベント名に依存せず、実際にタップされた県を拾う。
+    document.getElementById('japan-map').addEventListener('click', function(e) {
+      const shape = e.target && e.target.closest ? e.target.closest('[data-name]') : null;
+      const name = shape && shape.getAttribute('data-name');
+      if (name && JP_BY_EN[name]) selectPref(name);
+    });
     document.addEventListener('svgmap.click', function(e) {
-      const name = e.target && e.target.getAttribute && e.target.getAttribute('data-name');
+      const shape = e.target && e.target.closest ? e.target.closest('[data-name]') : null;
+      const name = shape && shape.getAttribute('data-name');
       if (name && JP_BY_EN[name]) selectPref(name);
     }, false);
 
@@ -462,6 +548,7 @@
       document.getElementById('empty-state').hidden = true;
       document.getElementById('pref-content').hidden = false;
       updateMapSelectionSummary();
+      renderMapQuickList();
       renderPanel();
       buildMap();
     }
@@ -476,6 +563,17 @@
         ? `Bucket ${items.length}件 ・ ${done}/${items.length} 達成`
         : 'Bucket Listはまだありません';
       box.hidden = false;
+    }
+
+    function renderMapQuickList() {
+      const wrap = document.getElementById('map-quick-list');
+      if (!selectedPref) { wrap.hidden = true; return; }
+      const items = itemsFor(selectedPref);
+      const title = JP_BY_EN[selectedPref];
+      wrap.innerHTML = items.length
+        ? `<div class="map-quick-head">${title}のMy Bucket List</div>${items.map(item => `<div class="map-quick-row ${item.done ? 'done' : ''}"><span class="map-quick-dot"></span><span>${escapeHtml(item.text)}</span></div>`).join('')}`
+        : `<div class="map-quick-head">${title}のMy Bucket List</div><div class="map-quick-row"><span>まだBucket Listはありません</span></div>`;
+      wrap.hidden = false;
     }
 
     function renderPanel() {
@@ -532,7 +630,7 @@
 
     function persistAndRefresh() {
       saveData();
-      if (selectedPref) { renderPanel(); updateMapSelectionSummary(); }
+      if (selectedPref) { renderPanel(); updateMapSelectionSummary(); renderMapQuickList(); }
       buildMap();
       renderAllList();
     }
@@ -643,7 +741,7 @@
         saveData();
         updateStats();
         buildMap();
-        if (selectedPref) { renderPanel(); updateMapSelectionSummary(); }
+        if (selectedPref) { renderPanel(); updateMapSelectionSummary(); renderMapQuickList(); }
         renderAllList();
         alert('バックアップを読み込みました。');
       } catch {
@@ -658,11 +756,44 @@
       saveData();
       updateStats();
       buildMap();
-      if (selectedPref) { renderPanel(); updateMapSelectionSummary(); }
+      if (selectedPref) { renderPanel(); updateMapSelectionSummary(); renderMapQuickList(); }
       renderAllList();
     });
 
+    document.getElementById('zoom-in').addEventListener('click', () => setMapZoom(mapZoom + .25));
+    document.getElementById('zoom-out').addEventListener('click', () => setMapZoom(mapZoom - .25));
+    document.getElementById('zoom-reset').addEventListener('click', () => setMapZoom(1));
+
+    // iPad / iPhoneでは2本指ピンチ時だけページ拡大を止め、地図そのものを拡大する。
+    const mapWrap = document.getElementById('map-wrap');
+    const touchDistance = touches => {
+      const [a,b] = touches;
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    };
+    mapWrap.addEventListener('touchstart', e => {
+      if (e.touches.length === 2) {
+        pinchStartDistance = touchDistance(e.touches);
+        pinchStartZoom = mapZoom;
+        document.getElementById('japan-map').classList.add('is-zooming');
+        e.preventDefault();
+      }
+    }, {passive:false});
+    mapWrap.addEventListener('touchmove', e => {
+      if (e.touches.length === 2 && pinchStartDistance) {
+        const ratio = touchDistance(e.touches) / pinchStartDistance;
+        setMapZoom(pinchStartZoom * ratio);
+        e.preventDefault();
+      }
+    }, {passive:false});
+    mapWrap.addEventListener('touchend', e => {
+      if (e.touches.length < 2) {
+        pinchStartDistance = null;
+        document.getElementById('japan-map').classList.remove('is-zooming');
+      }
+    }, {passive:true});
+
     initSelect();
+    applyMapZoom();
     updateStats();
     renderAllList();
     window.addEventListener('load', () => {
