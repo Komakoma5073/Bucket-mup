@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Japan Bucket Map Prototype v6</title>
+  <title>Japan Bucket Map Prototype v7</title>
   <style>
     :root {
       --bg: #f5f6f3;
@@ -226,6 +226,12 @@
       .empty { min-height: 260px; }
       .pref-select { display: block; }
     }
+
+    #japan-map .completion-flower {
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
   </style>
 </head>
 <body>
@@ -266,7 +272,7 @@
             <span class="none"><i></i>未登録</span>
             <span class="planned"><i></i>これから</span>
             <span class="progressing"><i></i>達成中</span>
-            <span class="complete"><i></i>達成 🌼</span>
+            <span class="complete"><i></i>達成</span>
             <span class="selected"><i></i>選択中</span>
           </div>
         </div>
@@ -427,6 +433,7 @@
     let mapZoom = 1;
     let mapPanX = 0;
     let mapPanY = 0;
+    let mapBaseViewBox = null;
     let pinchStartDistance = null;
     let pinchStartZoom = 1;
     let panStart = null;
@@ -464,31 +471,76 @@
       return mixHex('#c9de7c', '#00aa6e', rate / 100); // 達成率に応じて連続的に濃く
     }
 
+    function captureBaseViewBox() {
+      const svg = document.querySelector('#japan-map svg');
+      if (!svg) return false;
+
+      let x = 0, y = 0, width = 0, height = 0;
+      const vb = svg.viewBox && svg.viewBox.baseVal;
+      if (vb && vb.width && vb.height) {
+        x = vb.x; y = vb.y; width = vb.width; height = vb.height;
+      } else {
+        try {
+          const box = svg.getBBox();
+          x = box.x; y = box.y; width = box.width; height = box.height;
+        } catch (_) {}
+      }
+      if (!width || !height) return false;
+
+      mapBaseViewBox = { x, y, width, height };
+      svg.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      return true;
+    }
+
     function clampMapPan() {
-      const wrap = document.getElementById('map-wrap');
-      if (!wrap || mapZoom <= 1) { mapPanX = 0; mapPanY = 0; return; }
-      // 地図が画面外へ完全に逃げない範囲で自由に移動できるようにする。
-      const maxX = wrap.clientWidth * (mapZoom - 1) / 2;
-      const maxY = wrap.clientHeight * (mapZoom - 1) / 2;
-      mapPanX = Math.max(-maxX, Math.min(maxX, mapPanX));
-      mapPanY = Math.max(-maxY, Math.min(maxY, mapPanY));
+      if (!mapBaseViewBox || mapZoom <= 1) {
+        mapPanX = 0;
+        mapPanY = 0;
+        return;
+      }
+      const visibleW = mapBaseViewBox.width / mapZoom;
+      const visibleH = mapBaseViewBox.height / mapZoom;
+      const maxPanX = Math.max(0, (mapBaseViewBox.width - visibleW) / 2);
+      const maxPanY = Math.max(0, (mapBaseViewBox.height - visibleH) / 2);
+      mapPanX = Math.max(-maxPanX, Math.min(maxPanX, mapPanX));
+      mapPanY = Math.max(-maxPanY, Math.min(maxPanY, mapPanY));
     }
 
     function applyMapZoom() {
+      const svg = document.querySelector('#japan-map svg');
+      if (!svg) {
+        document.getElementById('zoom-reset').textContent = `${Math.round(mapZoom * 100)}%`;
+        return;
+      }
+      if (!mapBaseViewBox && !captureBaseViewBox()) return;
+
       clampMapPan();
-      const map = document.getElementById('japan-map');
-      map.style.transform = `translate(${mapPanX}px, ${mapPanY}px) scale(${mapZoom})`;
+      const visibleW = mapBaseViewBox.width / mapZoom;
+      const visibleH = mapBaseViewBox.height / mapZoom;
+      const centerX = mapBaseViewBox.x + mapBaseViewBox.width / 2 + mapPanX;
+      const centerY = mapBaseViewBox.y + mapBaseViewBox.height / 2 + mapPanY;
+      const x = centerX - visibleW / 2;
+      const y = centerY - visibleH / 2;
+
+      svg.setAttribute('viewBox', `${x} ${y} ${visibleW} ${visibleH}`);
+      document.getElementById('japan-map').style.transform = 'none';
       document.getElementById('zoom-reset').textContent = `${Math.round(mapZoom * 100)}%`;
     }
 
     function setMapZoom(next) {
-      mapZoom = Math.min(3.2, Math.max(1, next));
-      if (mapZoom === 1) { mapPanX = 0; mapPanY = 0; }
+      mapZoom = Math.min(4, Math.max(1, next));
+      if (mapZoom === 1) {
+        mapPanX = 0;
+        mapPanY = 0;
+      }
       applyMapZoom();
     }
 
     function resetMapView() {
-      mapZoom = 1; mapPanX = 0; mapPanY = 0;
+      mapZoom = 1;
+      mapPanX = 0;
+      mapPanY = 0;
       applyMapZoom();
     }
 
@@ -538,6 +590,8 @@
         });
         document.getElementById('map-fallback').style.display = 'none';
         document.querySelectorAll('#japan-map [data-name]').forEach(shape => { shape.style.cursor = 'pointer'; });
+        mapBaseViewBox = null;
+        captureBaseViewBox();
         addCompletionFlowers();
         applyMapZoom();
       } catch (e) {
@@ -825,7 +879,11 @@
         e.preventDefault();
       } else if (e.touches.length === 1 && mapZoom > 1) {
         const t = e.touches[0];
-        panStart = { x:t.clientX, y:t.clientY, panX:mapPanX, panY:mapPanY };
+        panStart = {
+          x:t.clientX, y:t.clientY,
+          panX:mapPanX, panY:mapPanY,
+          zoom:mapZoom
+        };
         isPanning = false;
       }
     }, {passive:false});
@@ -839,8 +897,12 @@
         const dx = t.clientX - panStart.x, dy = t.clientY - panStart.y;
         if (!isPanning && Math.hypot(dx,dy) > 6) isPanning = true;
         if (isPanning) {
-          mapPanX = panStart.panX + dx;
-          mapPanY = panStart.panY + dy;
+          const svg = document.querySelector('#japan-map svg');
+          const rect = svg ? svg.getBoundingClientRect() : mapWrap.getBoundingClientRect();
+          const visibleW = mapBaseViewBox ? mapBaseViewBox.width / panStart.zoom : 1;
+          const visibleH = mapBaseViewBox ? mapBaseViewBox.height / panStart.zoom : 1;
+          mapPanX = panStart.panX - dx * (visibleW / Math.max(1, rect.width));
+          mapPanY = panStart.panY - dy * (visibleH / Math.max(1, rect.height));
           applyMapZoom();
           e.preventDefault();
         }
@@ -862,14 +924,26 @@
     let mousePan = null;
     mapWrap.addEventListener('mousedown', e => {
       if (mapZoom <= 1 || e.button !== 0) return;
-      mousePan = {x:e.clientX, y:e.clientY, panX:mapPanX, panY:mapPanY};
+      mousePan = {
+        x:e.clientX, y:e.clientY,
+        panX:mapPanX, panY:mapPanY,
+        zoom:mapZoom
+      };
       isPanning = false;
     });
     window.addEventListener('mousemove', e => {
       if (!mousePan) return;
       const dx=e.clientX-mousePan.x, dy=e.clientY-mousePan.y;
       if (!isPanning && Math.hypot(dx,dy)>5) isPanning=true;
-      if (isPanning) { mapPanX=mousePan.panX+dx; mapPanY=mousePan.panY+dy; applyMapZoom(); }
+      if (isPanning) {
+        const svg = document.querySelector('#japan-map svg');
+        const rect = svg ? svg.getBoundingClientRect() : mapWrap.getBoundingClientRect();
+        const visibleW = mapBaseViewBox ? mapBaseViewBox.width / mousePan.zoom : 1;
+        const visibleH = mapBaseViewBox ? mapBaseViewBox.height / mousePan.zoom : 1;
+        mapPanX = mousePan.panX - dx * (visibleW / Math.max(1, rect.width));
+        mapPanY = mousePan.panY - dy * (visibleH / Math.max(1, rect.height));
+        applyMapZoom();
+      }
     });
     window.addEventListener('mouseup', () => {
       if (mousePan && isPanning) suppressMapClickUntil = Date.now() + 250;
