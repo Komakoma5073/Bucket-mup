@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Japan Bucket Map Prototype v5</title>
+  <title>Japan Bucket Map Prototype v6</title>
   <style>
     :root {
       --bg: #f5f6f3;
@@ -90,6 +90,7 @@
       place-items: center;
       transform-origin: center center;
       will-change: transform;
+      touch-action: none;
       transition: transform .16s ease-out;
     }
     #japan-map.is-zooming { transition: none; }
@@ -271,7 +272,7 @@
         </div>
         <div id="map-wrap">
           <div id="japan-map"></div>
-          <div class="map-zoom-hint">地図だけ拡大できます</div>
+          <div class="map-zoom-hint">2本指で拡大・1本指で移動</div>
           <div class="map-zoom-controls" aria-label="地図の拡大縮小">
             <button type="button" id="zoom-out" aria-label="縮小">−</button>
             <button type="button" id="zoom-in" aria-label="拡大">＋</button>
@@ -424,8 +425,13 @@
     let selectedPref = null;
     let listFilter = 'all';
     let mapZoom = 1;
+    let mapPanX = 0;
+    let mapPanY = 0;
     let pinchStartDistance = null;
     let pinchStartZoom = 1;
+    let panStart = null;
+    let isPanning = false;
+    let suppressMapClickUntil = 0;
 
     function loadData() {
       try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
@@ -458,14 +464,31 @@
       return mixHex('#c9de7c', '#00aa6e', rate / 100); // 達成率に応じて連続的に濃く
     }
 
+    function clampMapPan() {
+      const wrap = document.getElementById('map-wrap');
+      if (!wrap || mapZoom <= 1) { mapPanX = 0; mapPanY = 0; return; }
+      // 地図が画面外へ完全に逃げない範囲で自由に移動できるようにする。
+      const maxX = wrap.clientWidth * (mapZoom - 1) / 2;
+      const maxY = wrap.clientHeight * (mapZoom - 1) / 2;
+      mapPanX = Math.max(-maxX, Math.min(maxX, mapPanX));
+      mapPanY = Math.max(-maxY, Math.min(maxY, mapPanY));
+    }
+
     function applyMapZoom() {
+      clampMapPan();
       const map = document.getElementById('japan-map');
-      map.style.transform = `scale(${mapZoom})`;
+      map.style.transform = `translate(${mapPanX}px, ${mapPanY}px) scale(${mapZoom})`;
       document.getElementById('zoom-reset').textContent = `${Math.round(mapZoom * 100)}%`;
     }
 
     function setMapZoom(next) {
       mapZoom = Math.min(3.2, Math.max(1, next));
+      if (mapZoom === 1) { mapPanX = 0; mapPanY = 0; }
+      applyMapZoom();
+    }
+
+    function resetMapView() {
+      mapZoom = 1; mapPanX = 0; mapPanY = 0;
       applyMapZoom();
     }
 
@@ -529,17 +552,39 @@
       select.addEventListener('change', e => e.target.value && selectPref(e.target.value));
     }
 
-    // 地図ライブラリのイベント名に依存せず、実際にタップされた県を拾う。
-    document.getElementById('japan-map').addEventListener('click', function(e) {
-      const shape = e.target && e.target.closest ? e.target.closest('[data-name]') : null;
-      const name = shape && shape.getAttribute('data-name');
-      if (name && JP_BY_EN[name]) selectPref(name);
-    });
+    function resolvePrefName(raw) {
+      if (!raw) return null;
+      const value = String(raw).trim();
+      if (JP_BY_EN[value]) return value;
+      if (EN_BY_JP[value]) return EN_BY_JP[value];
+      const lower = value.toLowerCase();
+      const found = PREFS.find(([, en, jp]) => en.toLowerCase() === lower || jp === value);
+      return found ? found[1] : null;
+    }
+
+    function prefFromEventTarget(target) {
+      let node = target;
+      while (node && node !== document) {
+        if (node.getAttribute) {
+          const resolved = resolvePrefName(node.getAttribute('data-name'));
+          if (resolved) return resolved;
+        }
+        node = node.parentNode;
+      }
+      return null;
+    }
+
+    // svg-japan公式の svgmap.click を主経路にしつつ、通常clickも保険として使う。
     document.addEventListener('svgmap.click', function(e) {
-      const shape = e.target && e.target.closest ? e.target.closest('[data-name]') : null;
-      const name = shape && shape.getAttribute('data-name');
-      if (name && JP_BY_EN[name]) selectPref(name);
+      if (Date.now() < suppressMapClickUntil) return;
+      const pref = prefFromEventTarget(e.target);
+      if (pref) selectPref(pref);
     }, false);
+    document.getElementById('japan-map').addEventListener('click', function(e) {
+      if (Date.now() < suppressMapClickUntil) return;
+      const pref = prefFromEventTarget(e.target);
+      if (pref) selectPref(pref);
+    });
 
     function selectPref(pref) {
       selectedPref = pref;
@@ -762,9 +807,9 @@
 
     document.getElementById('zoom-in').addEventListener('click', () => setMapZoom(mapZoom + .25));
     document.getElementById('zoom-out').addEventListener('click', () => setMapZoom(mapZoom - .25));
-    document.getElementById('zoom-reset').addEventListener('click', () => setMapZoom(1));
+    document.getElementById('zoom-reset').addEventListener('click', resetMapView);
 
-    // iPad / iPhoneでは2本指ピンチ時だけページ拡大を止め、地図そのものを拡大する。
+    // iPad / iPhone: 2本指でズーム、拡大後は1本指ドラッグで上下左右・斜めに移動。
     const mapWrap = document.getElementById('map-wrap');
     const touchDistance = touches => {
       const [a,b] = touches;
@@ -774,8 +819,14 @@
       if (e.touches.length === 2) {
         pinchStartDistance = touchDistance(e.touches);
         pinchStartZoom = mapZoom;
+        panStart = null;
+        isPanning = false;
         document.getElementById('japan-map').classList.add('is-zooming');
         e.preventDefault();
+      } else if (e.touches.length === 1 && mapZoom > 1) {
+        const t = e.touches[0];
+        panStart = { x:t.clientX, y:t.clientY, panX:mapPanX, panY:mapPanY };
+        isPanning = false;
       }
     }, {passive:false});
     mapWrap.addEventListener('touchmove', e => {
@@ -783,6 +834,16 @@
         const ratio = touchDistance(e.touches) / pinchStartDistance;
         setMapZoom(pinchStartZoom * ratio);
         e.preventDefault();
+      } else if (e.touches.length === 1 && panStart && mapZoom > 1) {
+        const t = e.touches[0];
+        const dx = t.clientX - panStart.x, dy = t.clientY - panStart.y;
+        if (!isPanning && Math.hypot(dx,dy) > 6) isPanning = true;
+        if (isPanning) {
+          mapPanX = panStart.panX + dx;
+          mapPanY = panStart.panY + dy;
+          applyMapZoom();
+          e.preventDefault();
+        }
       }
     }, {passive:false});
     mapWrap.addEventListener('touchend', e => {
@@ -790,7 +851,30 @@
         pinchStartDistance = null;
         document.getElementById('japan-map').classList.remove('is-zooming');
       }
+      if (e.touches.length === 0) {
+        if (isPanning) suppressMapClickUntil = Date.now() + 350;
+        panStart = null;
+        isPanning = false;
+      }
     }, {passive:true});
+
+    // マウス/トラックパッドでも、拡大後はドラッグで地図を移動できる。
+    let mousePan = null;
+    mapWrap.addEventListener('mousedown', e => {
+      if (mapZoom <= 1 || e.button !== 0) return;
+      mousePan = {x:e.clientX, y:e.clientY, panX:mapPanX, panY:mapPanY};
+      isPanning = false;
+    });
+    window.addEventListener('mousemove', e => {
+      if (!mousePan) return;
+      const dx=e.clientX-mousePan.x, dy=e.clientY-mousePan.y;
+      if (!isPanning && Math.hypot(dx,dy)>5) isPanning=true;
+      if (isPanning) { mapPanX=mousePan.panX+dx; mapPanY=mousePan.panY+dy; applyMapZoom(); }
+    });
+    window.addEventListener('mouseup', () => {
+      if (mousePan && isPanning) suppressMapClickUntil = Date.now() + 250;
+      mousePan=null; isPanning=false;
+    });
 
     initSelect();
     applyMapZoom();
