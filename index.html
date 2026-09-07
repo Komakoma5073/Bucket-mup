@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Japan Bucket Map Prototype v7</title>
+  <title>Japan Bucket Map Prototype v8</title>
   <style>
     :root {
       --bg: #f5f6f3;
@@ -232,6 +232,105 @@
       user-select: none;
       -webkit-user-select: none;
     }
+  
+    /* v8: カテゴリ・記録・Memories */
+    .category-chip {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:4px 8px; border-radius:999px; background:#eef2ee;
+      color:#536158; font-size:11px; font-weight:800; white-space:nowrap;
+    }
+    .bucket-main { min-width:0; flex:1; }
+    .bucket-meta { display:flex; gap:7px; align-items:center; flex-wrap:wrap; margin-top:5px; }
+    .record-btn {
+      border:1px solid var(--line); background:#fff; color:var(--accent);
+      border-radius:9px; padding:6px 9px; font-size:12px; font-weight:800;
+    }
+    .record-btn.has-memory { background:#eef8f3; border-color:#b7ddca; }
+    .add-row-v8 {
+      display:grid; grid-template-columns:minmax(0,1fr) 140px auto; gap:8px;
+    }
+    .add-row-v8 select, .memory-form select {
+      border:1px solid var(--line); background:white; color:var(--ink);
+      border-radius:12px; padding:11px 10px; min-width:0;
+    }
+    .category-filters { display:flex; gap:7px; flex-wrap:wrap; margin-top:10px; }
+    .category-filter {
+      border:1px solid var(--line); background:#fff; color:var(--muted);
+      border-radius:999px; padding:7px 10px; font-size:12px; font-weight:800;
+    }
+    .category-filter.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+    .list-row-v8 { align-items:flex-start !important; }
+    .list-row-content { flex:1; min-width:0; }
+    .list-row-sub { display:flex; gap:7px; flex-wrap:wrap; margin-top:5px; }
+    .memory-page { padding:22px; }
+    .memory-page h2 { margin:0; }
+    .memory-intro { color:var(--muted); margin-top:5px; }
+    .memory-grid {
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+      gap:14px; margin-top:14px;
+    }
+    .memory-card {
+      border:1px solid var(--line); border-radius:18px; background:#fff;
+      overflow:hidden; box-shadow:0 8px 22px rgba(29,37,32,.05);
+    }
+    .memory-photo {
+      width:100%; aspect-ratio:4/3; object-fit:cover; display:block; background:#eef1ee;
+    }
+    .memory-photo-empty {
+      width:100%; aspect-ratio:4/3; display:grid; place-items:center;
+      background:#eef1ee; color:#8a948e; font-size:13px;
+    }
+    .memory-body { padding:13px; }
+    .memory-body h4 { margin:0 0 7px; font-size:15px; }
+    .memory-comment {
+      margin:9px 0 0; color:#526058; font-size:13px; line-height:1.55;
+      white-space:pre-wrap;
+    }
+    .memory-pref-section { margin-top:24px; }
+    .memory-pref-head {
+      display:flex; justify-content:space-between; align-items:center; gap:12px;
+      padding-bottom:8px; border-bottom:1px solid var(--line);
+    }
+    .memory-pref-head h3 { margin:0; font-size:18px; }
+    .memory-empty {
+      text-align:center; padding:52px 20px; color:var(--muted);
+      border:1px dashed #cdd5cf; border-radius:18px; margin-top:18px;
+    }
+    .modal-backdrop {
+      position:fixed; inset:0; z-index:1000; background:rgba(18,27,22,.48);
+      display:grid; place-items:center; padding:18px;
+    }
+    .modal-backdrop[hidden] { display:none !important; }
+    .memory-modal {
+      width:min(560px,100%); max-height:88vh; overflow:auto;
+      background:#fff; border-radius:22px; box-shadow:0 24px 80px rgba(0,0,0,.22);
+      padding:20px;
+    }
+    .modal-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+    .modal-head h3 { margin:0; }
+    .modal-close {
+      border:0; background:#eef1ee; border-radius:50%; width:36px; height:36px;
+      font-size:20px; line-height:1;
+    }
+    .memory-form { display:grid; gap:14px; margin-top:18px; }
+    .field-label { font-size:12px; font-weight:900; color:#56635b; display:block; margin-bottom:6px; }
+    .memory-form textarea {
+      width:100%; min-height:120px; resize:vertical; border:1px solid var(--line);
+      border-radius:13px; padding:12px; color:var(--ink); font:inherit;
+    }
+    .photo-preview-wrap {
+      border:1px dashed #c8d1ca; border-radius:16px; padding:10px; background:#fafbfa;
+    }
+    .photo-preview { width:100%; max-height:280px; object-fit:contain; border-radius:10px; display:block; }
+    .photo-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:9px; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
+    .memory-badge { font-size:11px; color:#16865d; font-weight:900; }
+    @media (max-width: 700px) {
+      .add-row-v8 { grid-template-columns:1fr; }
+      .memory-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+      .memory-body { padding:10px; }
+    }
+
   </style>
 </head>
 <body>
@@ -262,6 +361,7 @@
     <nav class="tabs" aria-label="表示切替">
       <button class="tab-btn active" type="button" data-view="map-view"><svg class="japan-icon" aria-hidden="true"><use href="#bucket-japan-icon"></use></svg>地図</button>
       <button class="tab-btn" type="button" data-view="list-view">☰ 一覧</button>
+      <button class="tab-btn" type="button" data-view="memory-view">▣ Memories</button>
     </nav>
 
     <section class="layout view" id="map-view">
@@ -327,8 +427,16 @@
 
           <section class="section">
             <div class="section-title"><h3>自分で追加</h3></div>
-            <form class="add-row" id="add-form">
+            <form class="add-row-v8" id="add-form">
               <input id="new-item" maxlength="100" placeholder="例：朝市で海鮮丼を食べる" autocomplete="off" />
+              <select id="new-category" aria-label="カテゴリ">
+                <option value="グルメ">🍽 グルメ</option>
+                <option value="イベント・祭">🎉 イベント・祭</option>
+                <option value="景色">🌿 景色</option>
+                <option value="体験">✨ 体験</option>
+                <option value="文化">🏯 文化</option>
+                <option value="その他" selected>・ その他</option>
+              </select>
               <button class="primary" type="submit">追加</button>
             </form>
           </section>
@@ -342,14 +450,66 @@
           <h2>Bucket List 一覧</h2>
           <div class="note" style="margin-top:5px">登録したBucketを、都道府県を開かずにまとめて確認できます。</div>
         </div>
-        <div class="filters" aria-label="一覧フィルター">
-          <button class="filter-btn active" type="button" data-filter="all">すべて</button>
-          <button class="filter-btn" type="button" data-filter="todo">未達成</button>
-          <button class="filter-btn" type="button" data-filter="done">達成済み</button>
+        <div>
+          <div class="filters" aria-label="一覧フィルター">
+            <button class="filter-btn active" type="button" data-filter="all">すべて</button>
+            <button class="filter-btn" type="button" data-filter="todo">これから</button>
+            <button class="filter-btn" type="button" data-filter="done">達成済み</button>
+          </div>
+          <div class="category-filters" id="category-filters" aria-label="カテゴリフィルター"></div>
         </div>
       </div>
       <div class="all-list" id="all-list"></div>
     </section>
+
+
+    <section class="card memory-page view" id="memory-view" hidden>
+      <div>
+        <h2>Memories</h2>
+        <div class="memory-intro">達成したBucketを、自分だけの旅の記録として都道府県ごとに残します。</div>
+      </div>
+      <div id="memory-list"></div>
+    </section>
+
+    <div class="modal-backdrop" id="memory-modal" hidden>
+      <div class="memory-modal" role="dialog" aria-modal="true" aria-labelledby="memory-modal-title">
+        <div class="modal-head">
+          <div>
+            <div class="eyebrow" id="memory-modal-pref"></div>
+            <h3 id="memory-modal-title">旅の記録</h3>
+          </div>
+          <button class="modal-close" type="button" id="memory-modal-close" aria-label="閉じる">×</button>
+        </div>
+        <form class="memory-form" id="memory-form">
+          <div>
+            <label class="field-label" for="memory-category">カテゴリ</label>
+            <select id="memory-category"></select>
+          </div>
+          <div>
+            <label class="field-label" for="memory-comment">コメント</label>
+            <textarea id="memory-comment" maxlength="1000" placeholder="行ってみてどうだった？ 未来の自分に残したいことを自由に。"></textarea>
+          </div>
+          <div>
+            <span class="field-label">写真（試作版は1枚）</span>
+            <div class="photo-preview-wrap">
+              <div id="photo-empty" class="note">まだ写真はありません。</div>
+              <img id="photo-preview" class="photo-preview" alt="記録写真" hidden />
+              <div class="photo-actions">
+                <label class="ghost" style="display:inline-flex;align-items:center;cursor:pointer">
+                  写真を選ぶ
+                  <input type="file" id="memory-photo" accept="image/*" style="display:none" />
+                </label>
+                <button class="ghost" type="button" id="remove-photo">写真を削除</button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="ghost" type="button" id="memory-cancel">キャンセル</button>
+            <button class="primary" type="submit">記録を保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <div class="footer-tools">
       <div>
@@ -427,9 +587,16 @@
     const JP_BY_EN = Object.fromEntries(PREFS.map(p => [p[1], p[2]]));
     const EN_BY_JP = Object.fromEntries(PREFS.map(p => [p[2], p[1]]));
     const STORAGE_KEY = 'japanBucketMapPrototype_v1';
+    const CATEGORIES = ['グルメ','イベント・祭','景色','体験','文化','その他'];
+    const CATEGORY_ICON = {
+      'グルメ':'🍽','イベント・祭':'🎉','景色':'🌿','体験':'✨','文化':'🏯','その他':'・'
+    };
     let data = loadData();
     let selectedPref = null;
     let listFilter = 'all';
+    let categoryFilter = 'すべて';
+    let editingMemory = null;
+    let pendingPhoto = null;
     let mapZoom = 1;
     let mapPanX = 0;
     let mapPanY = 0;
@@ -447,6 +614,30 @@
     function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
     function itemsFor(pref) { return data[pref] || []; }
     function uid() { return (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2)); }
+
+    function normalizeItem(item) {
+      if (!item.category) item.category = 'その他';
+      if (typeof item.comment !== 'string') item.comment = '';
+      if (typeof item.photo !== 'string') item.photo = '';
+      return item;
+    }
+    Object.values(data).forEach(items => Array.isArray(items) && items.forEach(normalizeItem));
+
+    function categoryOf(item) { return CATEGORIES.includes(item.category) ? item.category : 'その他'; }
+    function categoryChip(item) {
+      const cat = categoryOf(item);
+      return `<span class="category-chip">${CATEGORY_ICON[cat]} ${cat}</span>`;
+    }
+    function hasMemory(item) { return !!((item.comment && item.comment.trim()) || item.photo); }
+
+    function inferCategory(text) {
+      if (/食|丼|寿司|そば|うどん|ラーメン|カレー|牛たん|酒|グルメ|屋台|海鮮|料理|飲/.test(text)) return 'グルメ';
+      if (/祭|花火|フェスタ|イベント|おどり|雪まつり/.test(text)) return 'イベント・祭';
+      if (/寺|神社|城|大社|博物館|美術館|茶屋|史跡|東照宮/.test(text)) return '文化';
+      if (/見る|景色|夜景|夕日|星空|桜|紅葉|ラベンダー|海|山|滝|湖|渓流|自然|流氷|樹氷/.test(text)) return '景色';
+      if (/歩く|登る|泳ぐ|走る|ドライブ|温泉|泊まる|挑戦|巡る|渡る|行く/.test(text)) return '体験';
+      return 'その他';
+    }
 
     function prefRate(pref) {
       const items = itemsFor(pref);
@@ -677,7 +868,7 @@
 
     function renderPanel() {
       if (!selectedPref) return;
-      const items = itemsFor(selectedPref);
+      const items = itemsFor(selectedPref).map(normalizeItem);
       const done = items.filter(x => x.done).length;
       document.getElementById('pref-name').textContent = JP_BY_EN[selectedPref];
       document.getElementById('pref-progress').textContent = items.length ? `${done} / ${items.length} 達成` : 'まだBucket Listはありません';
@@ -687,14 +878,25 @@
       const sWrap = document.getElementById('suggestions');
       sWrap.innerHTML = suggestions.length ? suggestions.map(text => {
         const exists = items.some(x => x.text === text);
-        return `<div class="suggestion"><span>${escapeHtml(text)}</span><button class="mini-btn" data-add-suggestion="${encodeURIComponent(text)}" ${exists ? 'disabled' : ''}>${exists ? '追加済み' : '＋'}</button></div>`;
+        const cat = inferCategory(text);
+        return `<div class="suggestion">
+          <span><span class="category-chip">${CATEGORY_ICON[cat]} ${cat}</span> ${escapeHtml(text)}</span>
+          <button class="mini-btn" data-add-suggestion="${encodeURIComponent(text)}" data-suggestion-category="${cat}" ${exists ? 'disabled' : ''}>${exists ? '追加済み' : '＋'}</button>
+        </div>`;
       }).join('') : '<div class="note">この県の試作候補はまだありません。自分で追加してください。</div>';
 
       const list = document.getElementById('bucket-list');
       list.innerHTML = items.length ? items.map(item => `
         <div class="bucket-item ${item.done ? 'done' : ''}">
           <input class="check" type="checkbox" ${item.done ? 'checked' : ''} data-toggle="${item.id}" aria-label="達成切替" />
-          <span class="text">${escapeHtml(item.text)}</span>
+          <div class="bucket-main">
+            <span class="text">${escapeHtml(item.text)}</span>
+            <div class="bucket-meta">
+              ${categoryChip(item)}
+              ${hasMemory(item) ? '<span class="memory-badge">記録あり</span>' : ''}
+            </div>
+          </div>
+          ${item.done ? `<button class="record-btn ${hasMemory(item) ? 'has-memory' : ''}" type="button" data-memory="${item.id}">${hasMemory(item) ? '記録を見る' : '記録する'}</button>` : ''}
           <button class="delete" data-delete="${item.id}" aria-label="削除">×</button>
         </div>`).join('') : '<div class="note">Popularから追加するか、下から自分のBucketを登録できます。</div>';
 
@@ -704,12 +906,19 @@
 
     function bindPanelEvents() {
       document.querySelectorAll('[data-add-suggestion]').forEach(btn => btn.addEventListener('click', () => {
-        addItem(decodeURIComponent(btn.dataset.addSuggestion));
+        addItem(decodeURIComponent(btn.dataset.addSuggestion), btn.dataset.suggestionCategory || 'その他');
       }));
       document.querySelectorAll('[data-toggle]').forEach(box => box.addEventListener('change', () => {
         const item = itemsFor(selectedPref).find(x => x.id === box.dataset.toggle);
-        if (item) item.done = box.checked;
+        if (item) {
+          item.done = box.checked;
+          if (item.done && !item.completedAt) item.completedAt = new Date().toISOString();
+          if (!item.done) item.completedAt = null;
+        }
         persistAndRefresh();
+      }));
+      document.querySelectorAll('[data-memory]').forEach(btn => btn.addEventListener('click', () => {
+        openMemoryModal(selectedPref, btn.dataset.memory);
       }));
       document.querySelectorAll('[data-delete]').forEach(btn => btn.addEventListener('click', () => {
         data[selectedPref] = itemsFor(selectedPref).filter(x => x.id !== btn.dataset.delete);
@@ -718,12 +927,17 @@
       }));
     }
 
-    function addItem(text) {
+    function addItem(text, category = 'その他') {
       text = text.trim();
       if (!text || !selectedPref) return;
       if (!data[selectedPref]) data[selectedPref] = [];
       if (data[selectedPref].some(x => x.text === text)) return;
-      data[selectedPref].push({ id: uid(), text, done: false, createdAt: new Date().toISOString() });
+      data[selectedPref].push({
+        id: uid(), text, done: false,
+        category: CATEGORIES.includes(category) ? category : 'その他',
+        comment: '', photo: '',
+        createdAt: new Date().toISOString()
+      });
       persistAndRefresh();
     }
 
@@ -732,13 +946,30 @@
       if (selectedPref) { renderPanel(); updateMapSelectionSummary(); renderMapQuickList(); }
       buildMap();
       renderAllList();
+      renderMemories();
+    }
+
+    function renderCategoryFilters() {
+      const wrap = document.getElementById('category-filters');
+      if (!wrap) return;
+      const cats = ['すべて', ...CATEGORIES];
+      wrap.innerHTML = cats.map(cat => `<button type="button" class="category-filter ${categoryFilter === cat ? 'active' : ''}" data-category-filter="${cat}">${cat === 'すべて' ? 'すべてのカテゴリ' : CATEGORY_ICON[cat] + ' ' + cat}</button>`).join('');
+      wrap.querySelectorAll('[data-category-filter]').forEach(btn => btn.addEventListener('click', () => {
+        categoryFilter = btn.dataset.categoryFilter;
+        renderAllList();
+      }));
     }
 
     function renderAllList() {
+      renderCategoryFilters();
       const wrap = document.getElementById('all-list');
       const groups = PREFS.map(([_, en, jp]) => {
-        const allItems = itemsFor(en);
-        const visible = allItems.filter(item => listFilter === 'all' || (listFilter === 'done' ? item.done : !item.done));
+        const allItems = itemsFor(en).map(normalizeItem);
+        const visible = allItems.filter(item => {
+          const statusOk = listFilter === 'all' || (listFilter === 'done' ? item.done : !item.done);
+          const categoryOk = categoryFilter === 'すべて' || categoryOf(item) === categoryFilter;
+          return statusOk && categoryOk;
+        });
         return { en, jp, allItems, visible };
       }).filter(g => g.visible.length);
 
@@ -759,9 +990,13 @@
             <span><span class="rate-pill">${rate}%</span>　${done} / ${g.allItems.length} 達成</span>
           </div>
           <div class="pref-group-items">
-            ${g.visible.map(item => `<div class="list-row ${item.done ? 'done' : ''}">
+            ${g.visible.map(item => `<div class="list-row list-row-v8 ${item.done ? 'done' : ''}">
               <input class="check" type="checkbox" ${item.done ? 'checked' : ''} data-list-toggle-pref="${g.en}" data-list-toggle="${item.id}" aria-label="達成切替" />
-              <span class="text">${escapeHtml(item.text)}</span>
+              <div class="list-row-content">
+                <span class="text">${escapeHtml(item.text)}</span>
+                <div class="list-row-sub">${categoryChip(item)} ${hasMemory(item) ? '<span class="memory-badge">記録あり</span>' : ''}</div>
+              </div>
+              ${item.done ? `<button class="record-btn ${hasMemory(item) ? 'has-memory' : ''}" type="button" data-list-memory-pref="${g.en}" data-list-memory="${item.id}">${hasMemory(item) ? '記録' : '＋記録'}</button>` : ''}
               <button class="delete" data-list-delete-pref="${g.en}" data-list-delete="${item.id}" aria-label="削除">×</button>
             </div>`).join('')}
           </div>
@@ -771,8 +1006,15 @@
       wrap.querySelectorAll('[data-list-toggle]').forEach(box => box.addEventListener('change', () => {
         const pref = box.dataset.listTogglePref;
         const item = itemsFor(pref).find(x => x.id === box.dataset.listToggle);
-        if (item) item.done = box.checked;
+        if (item) {
+          item.done = box.checked;
+          if (item.done && !item.completedAt) item.completedAt = new Date().toISOString();
+          if (!item.done) item.completedAt = null;
+        }
         persistAndRefresh();
+      }));
+      wrap.querySelectorAll('[data-list-memory]').forEach(btn => btn.addEventListener('click', () => {
+        openMemoryModal(btn.dataset.listMemoryPref, btn.dataset.listMemory);
       }));
       wrap.querySelectorAll('[data-list-delete]').forEach(btn => btn.addEventListener('click', () => {
         const pref = btn.dataset.listDeletePref;
@@ -787,10 +1029,118 @@
       }));
     }
 
+
+    function renderMemories() {
+      const wrap = document.getElementById('memory-list');
+      if (!wrap) return;
+
+      const groups = PREFS.map(([_, en, jp]) => {
+        const items = itemsFor(en).map(normalizeItem).filter(item => item.done && hasMemory(item));
+        return { en, jp, items };
+      }).filter(g => g.items.length);
+
+      if (!groups.length) {
+        wrap.innerHTML = `<div class="memory-empty">まだ旅の記録はありません。<br>Bucketを達成したら「記録する」から写真やコメントを残せます。</div>`;
+        return;
+      }
+
+      wrap.innerHTML = groups.map(g => `
+        <section class="memory-pref-section">
+          <div class="memory-pref-head">
+            <h3>${g.jp}</h3>
+            <span class="note">${g.items.length} memories</span>
+          </div>
+          <div class="memory-grid">
+            ${g.items.map(item => `
+              <article class="memory-card" data-memory-card-pref="${g.en}" data-memory-card="${item.id}">
+                ${item.photo ? `<img class="memory-photo" src="${item.photo}" alt="${escapeHtml(item.text)}">` : `<div class="memory-photo-empty">写真なし</div>`}
+                <div class="memory-body">
+                  <h4>${escapeHtml(item.text)}</h4>
+                  ${categoryChip(item)}
+                  ${item.comment ? `<p class="memory-comment">${escapeHtml(item.comment)}</p>` : ''}
+                </div>
+              </article>
+            `).join('')}
+          </div>
+        </section>
+      `).join('');
+
+      wrap.querySelectorAll('[data-memory-card]').forEach(card => {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', () => openMemoryModal(card.dataset.memoryCardPref, card.dataset.memoryCard));
+      });
+    }
+
+    function openMemoryModal(pref, itemId) {
+      const item = itemsFor(pref).find(x => x.id === itemId);
+      if (!item) return;
+      normalizeItem(item);
+      editingMemory = { pref, itemId };
+      pendingPhoto = item.photo || '';
+
+      document.getElementById('memory-modal-pref').textContent = JP_BY_EN[pref];
+      document.getElementById('memory-modal-title').textContent = item.text;
+      const cat = document.getElementById('memory-category');
+      cat.innerHTML = CATEGORIES.map(c => `<option value="${c}">${CATEGORY_ICON[c]} ${c}</option>`).join('');
+      cat.value = categoryOf(item);
+      document.getElementById('memory-comment').value = item.comment || '';
+      renderPhotoPreview();
+      document.getElementById('memory-modal').hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeMemoryModal() {
+      document.getElementById('memory-modal').hidden = true;
+      document.body.style.overflow = '';
+      editingMemory = null;
+      pendingPhoto = null;
+      document.getElementById('memory-photo').value = '';
+    }
+
+    function renderPhotoPreview() {
+      const img = document.getElementById('photo-preview');
+      const empty = document.getElementById('photo-empty');
+      if (pendingPhoto) {
+        img.src = pendingPhoto;
+        img.hidden = false;
+        empty.hidden = true;
+      } else {
+        img.removeAttribute('src');
+        img.hidden = true;
+        empty.hidden = false;
+      }
+      document.getElementById('remove-photo').disabled = !pendingPhoto;
+    }
+
+    function compressImage(file, maxSide = 1200, quality = 0.76) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('画像を読み込めませんでした'));
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('画像を読み込めませんでした'));
+          img.onload = () => {
+            let w = img.naturalWidth, h = img.naturalHeight;
+            const scale = Math.min(1, maxSide / Math.max(w, h));
+            w = Math.max(1, Math.round(w * scale));
+            h = Math.max(1, Math.round(h * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
     function showView(id) {
       document.querySelectorAll('.view').forEach(v => v.hidden = v.id !== id);
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === id));
       if (id === 'list-view') renderAllList();
+      if (id === 'memory-view') renderMemories();
     }
 
     document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.view)));
@@ -950,10 +1300,62 @@
       mousePan=null; isPanning=false;
     });
 
+
+    document.getElementById('memory-modal-close').addEventListener('click', closeMemoryModal);
+    document.getElementById('memory-cancel').addEventListener('click', closeMemoryModal);
+    document.getElementById('memory-modal').addEventListener('click', e => {
+      if (e.target.id === 'memory-modal') closeMemoryModal();
+    });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && !document.getElementById('memory-modal').hidden) closeMemoryModal();
+    });
+
+    document.getElementById('memory-photo').addEventListener('change', async e => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) return alert('画像ファイルを選んでください。');
+      try {
+        pendingPhoto = await compressImage(file);
+        renderPhotoPreview();
+      } catch (err) {
+        alert(err.message || '写真を読み込めませんでした。');
+      }
+    });
+
+    document.getElementById('remove-photo').addEventListener('click', () => {
+      pendingPhoto = '';
+      document.getElementById('memory-photo').value = '';
+      renderPhotoPreview();
+    });
+
+    document.getElementById('memory-form').addEventListener('submit', e => {
+      e.preventDefault();
+      if (!editingMemory) return;
+      const item = itemsFor(editingMemory.pref).find(x => x.id === editingMemory.itemId);
+      if (!item) return closeMemoryModal();
+      normalizeItem(item);
+      item.category = document.getElementById('memory-category').value;
+      item.comment = document.getElementById('memory-comment').value.trim();
+      item.photo = pendingPhoto || '';
+      item.memoryUpdatedAt = new Date().toISOString();
+      try {
+        saveData();
+      } catch (err) {
+        alert('写真の保存容量が足りない可能性があります。写真を削除するか、別の小さい写真で試してください。');
+        return;
+      }
+      closeMemoryModal();
+      if (selectedPref) renderPanel();
+      renderAllList();
+      renderMemories();
+      buildMap();
+    });
+
     initSelect();
     applyMapZoom();
     updateStats();
     renderAllList();
+    renderMemories();
     window.addEventListener('load', () => {
       buildMap();
       setTimeout(() => {
