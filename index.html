@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Japan Bucket Map Prototype v8</title>
+  <title>Japan Bucket Map Prototype v9</title>
   <style>
     :root {
       --bg: #f5f6f3;
@@ -331,7 +331,31 @@
       .memory-body { padding:10px; }
     }
 
-  </style>
+  
+    .memory-date {
+      display:inline-flex; align-items:center; gap:5px; margin-top:7px;
+      color:#6a756e; font-size:12px; font-weight:800;
+    }
+    .memory-photo-grid {
+      display:grid; grid-template-columns:repeat(3,1fr); gap:6px;
+      padding:8px; background:#f3f5f3;
+    }
+    .memory-photo-grid img {
+      width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; display:block;
+    }
+    .photo-thumbs {
+      display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:8px;
+    }
+    .photo-thumb { position:relative; }
+    .photo-thumb img {
+      width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:10px; display:block;
+    }
+    .photo-thumb button {
+      position:absolute; top:5px; right:5px; width:28px; height:28px; border:0;
+      border-radius:50%; background:rgba(20,25,22,.72); color:white; font-size:17px;
+    }
+
+</style>
 </head>
 <body>
   <!-- Bucket Map用のオリジナル簡略日本地図アイコン -->
@@ -486,20 +510,24 @@
             <select id="memory-category"></select>
           </div>
           <div>
+            <label class="field-label" for="memory-date">行った日</label>
+            <input id="memory-date" type="date" style="width:100%;border:1px solid var(--line);border-radius:13px;padding:12px;color:var(--ink);font:inherit" />
+          </div>
+          <div>
             <label class="field-label" for="memory-comment">コメント</label>
             <textarea id="memory-comment" maxlength="1000" placeholder="行ってみてどうだった？ 未来の自分に残したいことを自由に。"></textarea>
           </div>
           <div>
-            <span class="field-label">写真（試作版は1枚）</span>
+            <span class="field-label">写真</span>
             <div class="photo-preview-wrap">
-              <div id="photo-empty" class="note">まだ写真はありません。</div>
-              <img id="photo-preview" class="photo-preview" alt="記録写真" hidden />
+              <div id="photo-empty" class="note">まだ写真はありません。好きな枚数を追加できます。</div>
+              <div id="photo-thumbs" class="photo-thumbs"></div>
               <div class="photo-actions">
                 <label class="ghost" style="display:inline-flex;align-items:center;cursor:pointer">
-                  写真を選ぶ
-                  <input type="file" id="memory-photo" accept="image/*" style="display:none" />
+                  写真を追加
+                  <input type="file" id="memory-photo" accept="image/*" multiple style="display:none" />
                 </label>
-                <button class="ghost" type="button" id="remove-photo">写真を削除</button>
+                <button class="ghost" type="button" id="remove-photo">すべて削除</button>
               </div>
             </div>
           </div>
@@ -596,7 +624,7 @@
     let listFilter = 'all';
     let categoryFilter = 'すべて';
     let editingMemory = null;
-    let pendingPhoto = null;
+    let pendingPhotos = [];
     let mapZoom = 1;
     let mapPanX = 0;
     let mapPanY = 0;
@@ -618,7 +646,9 @@
     function normalizeItem(item) {
       if (!item.category) item.category = 'その他';
       if (typeof item.comment !== 'string') item.comment = '';
-      if (typeof item.photo !== 'string') item.photo = '';
+      if (!Array.isArray(item.photos)) item.photos = item.photo ? [item.photo] : [];
+      if (typeof item.visitDate !== 'string') item.visitDate = '';
+      if ('photo' in item) delete item.photo;
       return item;
     }
     Object.values(data).forEach(items => Array.isArray(items) && items.forEach(normalizeItem));
@@ -628,7 +658,7 @@
       const cat = categoryOf(item);
       return `<span class="category-chip">${CATEGORY_ICON[cat]} ${cat}</span>`;
     }
-    function hasMemory(item) { return !!((item.comment && item.comment.trim()) || item.photo); }
+    function hasMemory(item) { return !!((item.comment && item.comment.trim()) || (item.photos && item.photos.length) || item.visitDate); }
 
     function inferCategory(text) {
       if (/食|丼|寿司|そば|うどん|ラーメン|カレー|牛たん|酒|グルメ|屋台|海鮮|料理|飲/.test(text)) return 'グルメ';
@@ -935,7 +965,7 @@
       data[selectedPref].push({
         id: uid(), text, done: false,
         category: CATEGORIES.includes(category) ? category : 'その他',
-        comment: '', photo: '',
+        comment: '', photos: [], visitDate: '',
         createdAt: new Date().toISOString()
       });
       persistAndRefresh();
@@ -1053,10 +1083,13 @@
           <div class="memory-grid">
             ${g.items.map(item => `
               <article class="memory-card" data-memory-card-pref="${g.en}" data-memory-card="${item.id}">
-                ${item.photo ? `<img class="memory-photo" src="${item.photo}" alt="${escapeHtml(item.text)}">` : `<div class="memory-photo-empty">写真なし</div>`}
+                ${item.photos && item.photos.length
+                  ? `<div class="memory-photo-grid">${item.photos.slice(0,6).map(p => `<img src="${p}" alt="${escapeHtml(item.text)}">`).join('')}</div>`
+                  : `<div class="memory-photo-empty">写真なし</div>`}
                 <div class="memory-body">
                   <h4>${escapeHtml(item.text)}</h4>
                   ${categoryChip(item)}
+                  ${item.visitDate ? `<div class="memory-date">📅 ${escapeHtml(item.visitDate)}</div>` : ''}
                   ${item.comment ? `<p class="memory-comment">${escapeHtml(item.comment)}</p>` : ''}
                 </div>
               </article>
@@ -1076,7 +1109,7 @@
       if (!item) return;
       normalizeItem(item);
       editingMemory = { pref, itemId };
-      pendingPhoto = item.photo || '';
+      pendingPhotos = Array.isArray(item.photos) ? [...item.photos] : [];
 
       document.getElementById('memory-modal-pref').textContent = JP_BY_EN[pref];
       document.getElementById('memory-modal-title').textContent = item.text;
@@ -1084,6 +1117,7 @@
       cat.innerHTML = CATEGORIES.map(c => `<option value="${c}">${CATEGORY_ICON[c]} ${c}</option>`).join('');
       cat.value = categoryOf(item);
       document.getElementById('memory-comment').value = item.comment || '';
+      document.getElementById('memory-date').value = item.visitDate || new Date().toLocaleDateString('en-CA');
       renderPhotoPreview();
       document.getElementById('memory-modal').hidden = false;
       document.body.style.overflow = 'hidden';
@@ -1093,23 +1127,24 @@
       document.getElementById('memory-modal').hidden = true;
       document.body.style.overflow = '';
       editingMemory = null;
-      pendingPhoto = null;
+      pendingPhotos = [];
       document.getElementById('memory-photo').value = '';
     }
 
     function renderPhotoPreview() {
-      const img = document.getElementById('photo-preview');
+      const wrap = document.getElementById('photo-thumbs');
       const empty = document.getElementById('photo-empty');
-      if (pendingPhoto) {
-        img.src = pendingPhoto;
-        img.hidden = false;
-        empty.hidden = true;
-      } else {
-        img.removeAttribute('src');
-        img.hidden = true;
-        empty.hidden = false;
-      }
-      document.getElementById('remove-photo').disabled = !pendingPhoto;
+      wrap.innerHTML = pendingPhotos.map((src, index) => `
+        <div class="photo-thumb">
+          <img src="${src}" alt="記録写真 ${index + 1}">
+          <button type="button" data-remove-photo-index="${index}" aria-label="写真を削除">×</button>
+        </div>`).join('');
+      empty.hidden = pendingPhotos.length > 0;
+      document.getElementById('remove-photo').disabled = pendingPhotos.length === 0;
+      wrap.querySelectorAll('[data-remove-photo-index]').forEach(btn => btn.addEventListener('click', () => {
+        pendingPhotos.splice(Number(btn.dataset.removePhotoIndex), 1);
+        renderPhotoPreview();
+      }));
     }
 
     function compressImage(file, maxSide = 1200, quality = 0.76) {
@@ -1311,19 +1346,23 @@
     });
 
     document.getElementById('memory-photo').addEventListener('change', async e => {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-      if (!file.type.startsWith('image/')) return alert('画像ファイルを選んでください。');
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
       try {
-        pendingPhoto = await compressImage(file);
+        for (const file of files) {
+          if (!file.type.startsWith('image/')) continue;
+          const compressed = await compressImage(file, 1000, 0.68);
+          pendingPhotos.push(compressed);
+        }
         renderPhotoPreview();
+        e.target.value = '';
       } catch (err) {
         alert(err.message || '写真を読み込めませんでした。');
       }
     });
 
     document.getElementById('remove-photo').addEventListener('click', () => {
-      pendingPhoto = '';
+      pendingPhotos = [];
       document.getElementById('memory-photo').value = '';
       renderPhotoPreview();
     });
@@ -1336,12 +1375,13 @@
       normalizeItem(item);
       item.category = document.getElementById('memory-category').value;
       item.comment = document.getElementById('memory-comment').value.trim();
-      item.photo = pendingPhoto || '';
+      item.visitDate = document.getElementById('memory-date').value || '';
+      item.photos = [...pendingPhotos];
       item.memoryUpdatedAt = new Date().toISOString();
       try {
         saveData();
       } catch (err) {
-        alert('写真の保存容量が足りない可能性があります。写真を削除するか、別の小さい写真で試してください。');
+        alert('ブラウザの保存容量が足りない可能性があります。試作品では端末内保存のため、写真が多い場合は一部を減らしてください。本番アプリではクラウド保存に切り替える予定です。');
         return;
       }
       closeMemoryModal();
